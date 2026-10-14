@@ -1,0 +1,35 @@
+@extends('layouts.app')
+@section('title', 'Kelola mahasiswa')
+@section('content')
+<div class="page-heading">
+    <div><span class="eyebrow">Administrasi</span><h1 class="mt-1">Akun mahasiswa</h1><p class="text-secondary mb-0">Kelola akses dan lihat aktivitas pencatatan mahasiswa.</p></div>
+    <a class="btn btn-primary" href="{{ route('users.create') }}"><i class="bi bi-person-plus me-1"></i>Tambah mahasiswa</a>
+</div>
+<section class="surface p-3 mb-3">
+    <form method="GET" action="{{ route('users.index') }}" class="row g-2 align-items-end">
+        <div class="col-12 col-md-6"><label class="form-label small fw-semibold mb-1" for="q">Cari mahasiswa</label><input class="form-control" id="q" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Nama atau email"></div>
+        <div class="col-auto"><button class="btn btn-outline-primary" type="submit"><i class="bi bi-search me-1"></i>Cari</button></div>
+        @if (! empty($filters['q']))<div class="col-auto"><a class="btn btn-link text-secondary text-decoration-none" href="{{ route('users.index') }}">Reset</a></div>@endif
+    </form>
+</section>
+<section class="surface overflow-hidden">
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead><tr><th>Mahasiswa</th><th>Transaksi tercatat</th><th>Bergabung</th><th class="text-end">Aksi</th></tr></thead>
+            <tbody>
+            @forelse ($students as $student)
+                <tr>
+                    <td><div class="fw-semibold">{{ $student->name }}</div><div class="small text-secondary">{{ $student->email }}</div></td>
+                    <td><span class="badge badge-soft me-1">{{ $student->incomes_count }} masuk</span><span class="badge bg-danger-subtle text-danger-emphasis">{{ $student->expenses_count }} keluar</span></td>
+                    <td>{{ $student->created_at->translatedFormat('d M Y') }}</td>
+                    <td><div class="d-flex justify-content-end gap-1"><a class="btn btn-sm btn-outline-secondary" href="{{ route('users.edit', $student) }}" title="Ubah akun" aria-label="Ubah akun"><i class="bi bi-pencil"></i></a><form method="POST" action="{{ route('users.destroy', $student) }}" data-confirm="Hapus akun mahasiswa ini? Akun dengan transaksi tidak dapat dihapus.">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger" type="submit" title="Hapus akun" aria-label="Hapus akun"><i class="bi bi-trash"></i></button></form></div></td>
+                </tr>
+            @empty
+                <tr><td colspan="4"><div class="empty-state"><i class="bi bi-people"></i><p class="mt-2 mb-0">Tidak ada akun mahasiswa yang cocok.</p></div></td></tr>
+            @endforelse
+            </tbody>
+        </table>
+    </div>
+    @if ($students->hasPages())<div class="p-3 border-top">{{ $students->links() }}</div>@endif
+</section>
+@endsection
