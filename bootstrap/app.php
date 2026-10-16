@@ -14,7 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'role' => \App\Http\Middleware\PeranMiddleware::class,
+            'active' => \App\Http\Middleware\AkunAktifMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -28,6 +29,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 : 500;
             $view = in_array($status, [403, 404, 419, 429, 500], true) ? $status : 500;
 
-            return response()->view("errors.$view", status: $status);
+            return response()->view("kesalahan.$view", status: $status);
         });
     })->create();

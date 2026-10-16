@@ -1,0 +1,4 @@
+<div class="row g-3">
+    <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="name">Nama kategori <span class="text-danger">*</span></label><input class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name', $category?->name) }}" maxlength="60" required>@error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="type">Jenis transaksi <span class="text-danger">*</span></label><select class="form-select @error('type') is-invalid @enderror" id="type" name="type" required><option value="">Pilih jenis</option><option value="income" @selected(old('type', $category?->type) === 'income')>Pemasukan</option><option value="expense" @selected(old('type', $category?->type) === 'expense')>Pengeluaran</option></select>@error('type')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+</div>

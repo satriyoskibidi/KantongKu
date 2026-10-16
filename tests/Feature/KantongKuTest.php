@@ -2,10 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Models\Expense;
-use App\Models\Income;
-use App\Models\User;
+use App\Models\Pengeluaran;
+use App\Models\Pemasukan;
+use App\Models\Pengguna;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class KantongKuTest extends TestCase
@@ -14,7 +15,7 @@ class KantongKuTest extends TestCase
 
     public function test_student_can_log_in_and_view_the_dashboard(): void
     {
-        $student = User::factory()->create(['email' => 'student@example.test', 'password' => 'password123']);
+        $student = Pengguna::factory()->create(['email' => 'student@example.test', 'password' => 'password123']);
 
         $this->post(route('login.store'), [
             'email' => $student->email,
@@ -22,6 +23,26 @@ class KantongKuTest extends TestCase
         ])->assertRedirectToRoute('dashboard');
 
         $this->get(route('dashboard'))->assertOk()->assertSee('Arus uang harian');
+    }
+
+    public function test_inactive_account_cannot_log_in_or_continue_a_session(): void
+    {
+        $student = Pengguna::factory()->create([
+            'email' => 'inactive@example.test',
+            'password' => 'password123',
+            'is_active' => false,
+        ]);
+
+        $this->from(route('login'))->post(route('login.store'), [
+            'email' => $student->email,
+            'password' => 'password123',
+        ])->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+        $this->assertGuest();
+
+        $this->actingAs($student)->get(route('dashboard'))
+            ->assertRedirect(route('login'));
+        $this->assertGuest();
     }
 
     public function test_student_can_register_and_cannot_choose_an_admin_role(): void
@@ -36,7 +57,7 @@ class KantongKuTest extends TestCase
             'role' => 'admin',
         ])->assertRedirectToRoute('dashboard');
 
-        $student = User::where('email', 'pendaftar@example.test')->firstOrFail();
+        $student = Pengguna::where('email', 'pendaftar@example.test')->firstOrFail();
         $this->assertSame('mahasiswa', $student->role);
         $this->assertAuthenticatedAs($student);
         $this->assertNotSame('password123', $student->password);
@@ -44,7 +65,7 @@ class KantongKuTest extends TestCase
 
     public function test_registration_rejects_duplicate_email_and_unconfirmed_password(): void
     {
-        User::factory()->create(['email' => 'existing@example.test']);
+        Pengguna::factory()->create(['email' => 'existing@example.test']);
 
         $this->from(route('register'))->post(route('register.store'), [
             'name' => 'Pendaftar Baru',
@@ -57,8 +78,8 @@ class KantongKuTest extends TestCase
 
     public function test_student_can_create_own_transactions_but_cannot_access_others(): void
     {
-        $student = User::factory()->create();
-        $otherStudent = User::factory()->create();
+        $student = Pengguna::factory()->create();
+        $otherStudent = Pengguna::factory()->create();
         $this->actingAs($student);
 
         $this->post(route('incomes.store'), [
@@ -68,11 +89,11 @@ class KantongKuTest extends TestCase
             'transaction_date' => now()->toDateString(),
         ])->assertRedirectToRoute('incomes.index');
 
-        $income = Income::where('title', 'Beasiswa')->firstOrFail();
+        $income = Pemasukan::where('title', 'Beasiswa')->firstOrFail();
         $this->assertSame($student->id, $income->user_id);
         $this->get(route('incomes.edit', $income))->assertOk();
 
-        $otherIncome = Income::create([
+        $otherIncome = Pemasukan::create([
             'user_id' => $otherStudent->id,
             'title' => 'Privat',
             'category' => 'Pekerjaan',
@@ -94,8 +115,8 @@ class KantongKuTest extends TestCase
 
     public function test_student_cannot_assign_transaction_to_another_account_or_open_admin_pages(): void
     {
-        $student = User::factory()->create();
-        $otherStudent = User::factory()->create();
+        $student = Pengguna::factory()->create();
+        $otherStudent = Pengguna::factory()->create();
         $this->actingAs($student);
 
         $this->post(route('incomes.store'), [
@@ -111,8 +132,8 @@ class KantongKuTest extends TestCase
 
     public function test_admin_can_record_for_a_student_and_manage_student_accounts(): void
     {
-        $admin = User::factory()->create(['role' => 'admin']);
-        $student = User::factory()->create();
+        $admin = Pengguna::factory()->create(['role' => 'admin']);
+        $student = Pengguna::factory()->create();
         $this->actingAs($admin);
 
         $this->post(route('incomes.store'), [
@@ -136,17 +157,112 @@ class KantongKuTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'baru@example.test', 'role' => 'mahasiswa']);
     }
 
+    public function test_admin_has_a_separate_dashboard_and_read_only_transaction_monitor(): void
+    {
+        $admin = Pengguna::factory()->create(['role' => 'admin']);
+        $student = Pengguna::factory()->create();
+        Pemasukan::create([
+            'user_id' => $student->id,
+            'title' => 'Beasiswa bulan ini',
+            'category' => 'Beasiswa',
+            'amount' => 1000000,
+            'transaction_date' => now()->startOfMonth()->toDateString(),
+        ]);
+        Pengeluaran::create([
+            'user_id' => $student->id,
+            'title' => 'Makan bulan ini',
+            'category' => 'Makan',
+            'amount' => 200000,
+            'transaction_date' => now()->startOfMonth()->toDateString(),
+        ]);
+
+        $this->actingAs($admin)->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Dashboard admin')
+            ->assertSee('Total mahasiswa')
+            ->assertDontSee('Rasio tabungan');
+
+        $this->get(route('admin.transactions.index'))
+            ->assertOk()
+            ->assertSee($student->name)
+            ->assertSee('Beasiswa bulan ini')
+            ->assertSee('Makan bulan ini')
+            ->assertSee('hanya-baca');
+
+        $this->get(route('admin.transactions.index', [
+            'user_id' => $student->id,
+            'from' => now()->startOfMonth()->toDateString(),
+            'to' => now()->startOfMonth()->toDateString(),
+            'category' => 'Beasiswa',
+            'type' => 'income',
+        ]))->assertOk()->assertSee('Beasiswa bulan ini')->assertDontSee('Makan bulan ini');
+
+        $this->get(route('admin.reports.index', ['month' => now()->format('Y-m')]))
+            ->assertOk()
+            ->assertSee('Rp 1.000.000')
+            ->assertSee('Rp 200.000')
+            ->assertSee('Pengeluaran per kategori');
+    }
+
+    public function test_admin_can_manage_categories_student_status_and_own_profile(): void
+    {
+        $admin = Pengguna::factory()->create(['role' => 'admin', 'password' => 'password123']);
+        $student = Pengguna::factory()->create();
+        $this->actingAs($admin);
+
+        $this->post(route('categories.store'), ['name' => 'Kuota', 'type' => 'expense'])
+            ->assertRedirectToRoute('categories.index');
+        $this->assertDatabaseHas('categories', ['name' => 'Kuota', 'type' => 'expense']);
+        $category = \App\Models\Kategori::where('name', 'Kuota')->firstOrFail();
+        $this->put(route('categories.update', $category), ['name' => 'Kuota internet', 'type' => 'expense'])
+            ->assertRedirectToRoute('categories.index');
+        $this->delete(route('categories.destroy', $category->fresh()))->assertRedirectToRoute('categories.index');
+        $this->assertDatabaseMissing('categories', ['id' => $category->id]);
+
+        $this->put(route('users.update', $student), [
+            'name' => 'Mahasiswa diperbarui',
+            'email' => $student->email,
+            'password' => 'reset123',
+            'password_confirmation' => 'reset123',
+        ])->assertRedirectToRoute('users.index');
+        $this->assertTrue(Hash::check('reset123', $student->fresh()->password));
+
+        $this->patch(route('users.status', $student))->assertRedirectToRoute('users.index');
+        $this->assertDatabaseHas('users', ['id' => $student->id, 'is_active' => false]);
+
+        $this->put(route('admin.profile.update'), [
+            'name' => 'Admin Baru',
+            'current_password' => 'password123',
+            'password' => 'password456',
+            'password_confirmation' => 'password456',
+        ])->assertRedirectToRoute('admin.profile.edit');
+
+        $this->assertDatabaseHas('users', ['id' => $admin->id, 'name' => 'Admin Baru']);
+        $this->assertTrue(Hash::check('password456', $admin->fresh()->password));
+    }
+
+    public function test_student_cannot_access_admin_monitoring_reports_categories_or_profile(): void
+    {
+        $student = Pengguna::factory()->create();
+        $this->actingAs($student);
+
+        $this->get(route('admin.transactions.index'))->assertForbidden();
+        $this->get(route('admin.reports.index'))->assertForbidden();
+        $this->get(route('categories.index'))->assertForbidden();
+        $this->get(route('admin.profile.edit'))->assertForbidden();
+    }
+
     public function test_dashboard_shows_monthly_insight_and_totals(): void
     {
-        $student = User::factory()->create();
-        Income::create([
+        $student = Pengguna::factory()->create();
+        Pemasukan::create([
             'user_id' => $student->id,
             'title' => 'Beasiswa',
             'category' => 'Pendidikan',
             'amount' => 1000000,
             'transaction_date' => now()->startOfMonth()->toDateString(),
         ]);
-        Expense::create([
+        Pengeluaran::create([
             'user_id' => $student->id,
             'title' => 'Buku',
             'category' => 'Kuliah',
@@ -163,9 +279,9 @@ class KantongKuTest extends TestCase
 
     public function test_account_with_transaction_history_cannot_be_deleted(): void
     {
-        $admin = User::factory()->create(['role' => 'admin']);
-        $student = User::factory()->create();
-        Income::create([
+        $admin = Pengguna::factory()->create(['role' => 'admin']);
+        $student = Pengguna::factory()->create();
+        Pemasukan::create([
             'user_id' => $student->id,
             'title' => 'Beasiswa',
             'category' => 'Pendidikan',

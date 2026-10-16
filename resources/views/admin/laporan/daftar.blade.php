@@ -1,0 +1,15 @@
+@extends('tata-letak.aplikasi')
+@section('title', 'Rekap bulanan')
+@section('content')
+<div class="page-heading"><div><span class="eyebrow">Laporan</span><h1 class="mt-1">Rekap bulanan</h1><p class="text-secondary mb-0">Ringkasan transaksi semua mahasiswa.</p></div></div>
+<form class="surface p-3 mb-4" method="GET" action="{{ route('admin.reports.index') }}"><div class="row g-2 align-items-end"><div class="col-12 col-sm-6 col-lg-3"><label class="form-label small fw-semibold mb-1" for="month">Periode</label><input class="form-control" type="month" id="month" name="month" value="{{ $month }}"></div><div class="col-auto"><button class="btn btn-primary" type="submit"><i class="bi bi-funnel me-1"></i>Tampilkan</button></div></div></form>
+<div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3"><article class="surface stat-card h-100"><div class="stat-label">Pemasukan</div><div class="stat-value mt-3">Rp {{ number_format($incomeTotal, 0, ',', '.') }}</div><div class="small text-secondary mt-1">{{ number_format($incomeCount, 0, ',', '.') }} transaksi · {{ $period->translatedFormat('F Y') }}</div></article></div>
+    <div class="col-6 col-xl-3"><article class="surface stat-card expense h-100"><div class="stat-label">Pengeluaran</div><div class="stat-value mt-3">Rp {{ number_format($expenseTotal, 0, ',', '.') }}</div><div class="small text-secondary mt-1">{{ number_format($expenseCount, 0, ',', '.') }} transaksi · {{ $period->translatedFormat('F Y') }}</div></article></div>
+    <div class="col-12 col-xl-6"><article class="surface stat-card balance h-100"><div class="stat-label">Selisih bersih</div><div class="stat-value mt-3">Rp {{ number_format($incomeTotal - $expenseTotal, 0, ',', '.') }}</div><div class="small text-secondary mt-1">Pemasukan dikurangi pengeluaran</div></article></div>
+</div>
+<div class="row g-3">
+    <div class="col-12 col-lg-6"><section class="surface overflow-hidden h-100"><div class="p-3 border-bottom"><h2 class="panel-title mb-0">Pemasukan per kategori</h2></div><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Kategori</th><th class="text-end">Total</th></tr></thead><tbody>@forelse ($incomeCategories as $item)<tr><td>{{ $item->category }}</td><td class="text-end fw-semibold">Rp {{ number_format((float) $item->total, 0, ',', '.') }}</td></tr>@empty<tr><td colspan="2" class="text-secondary p-3">Belum ada pemasukan pada bulan ini.</td></tr>@endforelse</tbody></table></div></section></div>
+    <div class="col-12 col-lg-6"><section class="surface overflow-hidden h-100"><div class="p-3 border-bottom"><h2 class="panel-title mb-0">Pengeluaran per kategori</h2></div><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Kategori</th><th class="text-end">Total</th></tr></thead><tbody>@forelse ($expenseCategories as $item)<tr><td>{{ $item->category }}</td><td class="text-end fw-semibold">Rp {{ number_format((float) $item->total, 0, ',', '.') }}</td></tr>@empty<tr><td colspan="2" class="text-secondary p-3">Belum ada pengeluaran pada bulan ini.</td></tr>@endforelse</tbody></table></div></section></div>
+</div>
+@endsection
